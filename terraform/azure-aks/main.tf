@@ -7,20 +7,34 @@ resource "azurerm_resource_group" "aks" {
   location = var.location
 }
 
+resource "azurerm_virtual_network" "aks" {
+  name                = "${var.cluster_name}-vnet"
+  location            = azurerm_resource_group.aks.location
+  resource_group_name = azurerm_resource_group.aks.name
+  address_space       = var.vnet_address_space
+}
+
+resource "azurerm_subnet" "aks" {
+  name                 = "${var.cluster_name}-subnet"
+  resource_group_name  = azurerm_resource_group.aks.name
+  virtual_network_name = azurerm_virtual_network.aks.name
+  address_prefixes     = var.subnet_address_prefixes
+}
+
 module "aks" {
   source  = "Azure/aks/azurerm"
-  version = "7.3.1"
+  version = "9.1.0" # Updated to latest stable
 
   resource_group_name = azurerm_resource_group.aks.name
-  location            = var.location
+  location            = azurerm_resource_group.aks.location
   cluster_name        = var.cluster_name
   prefix              = "ent-k8s"
-  kubernetes_version  = "1.27"
+  kubernetes_version  = "1.30"
 
   # Production: Network Configuration
   network_plugin      = "azure"
   network_policy      = "azure"
-  vnet_subnet_id      = var.vnet_subnet_id # Assuming passed variable for existing VNet
+  vnet_subnet_id      = azurerm_subnet.aks.id
   
   # Production: RBAC & AAD Integration
   role_based_access_control_enabled = true
@@ -48,3 +62,4 @@ module "aks" {
     Project     = "Enterprise Kubernetes Platform"
   }
 }
+

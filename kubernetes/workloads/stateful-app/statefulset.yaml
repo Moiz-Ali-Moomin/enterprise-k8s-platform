@@ -12,17 +12,20 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: stateful-db
+  labels:
+    app.kubernetes.io/name: database
+    app.kubernetes.io/part-of: enterprise-platform
   namespace: default
 spec:
   selector:
     matchLabels:
-      app: database
+      app.kubernetes.io/name: database
   serviceName: "database"
   replicas: 3
   template:
     metadata:
       labels:
-        app: database
+        app.kubernetes.io/name: database
     spec:
       containers:
       - name: postgres
@@ -49,6 +52,13 @@ spec:
           initialDelaySeconds: 10
           periodSeconds: 5
           
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data

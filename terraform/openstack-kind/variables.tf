@@ -17,11 +17,21 @@ variable "keypair_name" {
 variable "allowed_ssh_cidr" {
   description = "CIDR block allowed to SSH into nodes"
   type        = string
-  default     = "0.0.0.0/0" # User should override this in prod.tfvars
+  default     = "0.0.0.0/0"
+  
+  validation {
+    condition     = var.allowed_ssh_cidr != "0.0.0.0/0"
+    error_message = "SSH access from 0.0.0.0/0 is not allowed in production."
+  }
 }
 
 variable "allowed_api_cidr" {
   description = "CIDR block allowed to access K8s API"
   type        = string
-  default     = "0.0.0.0/0" # User should override this in prod.tfvars
+  default     = "0.0.0.0/0"
+
+  validation {
+    condition     = var.allowed_api_cidr != "0.0.0.0/0"
+    error_message = "K8s API access from 0.0.0.0/0 is not allowed in production."
+  }
 }

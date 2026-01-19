@@ -1,6 +1,41 @@
-
 # Terraform
-**/.terraform/
-**/.terraform.lock.hcl
+.terraform/
 *.tfstate
 *.tfstate.backup
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+_override.tf
+_override.tf.json
+.terraform.lock.hcl
+
+# Ansible
+ansible/inventory
+*.retry
+*.pyc
+__pycache__/
+
+# Python
+venv/
+.venv/
+env/
+.env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary Files
+tmp/
+*.tmp
+*.log
+
+# Secrets (Double lock)
+**/*secret*
+**/*password*
+**/*.key
+**/*.pem
+**/credentials

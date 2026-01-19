@@ -43,6 +43,13 @@ spec:
               value: sonarqube
           ports:
             - containerPort: 5432
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
@@ -109,6 +116,13 @@ spec:
               mountPath: /opt/sonarqube/data
             - name: sonarqube-extensions
               mountPath: /opt/sonarqube/extensions
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 2Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
       volumes:
         - name: sonarqube-data
           persistentVolumeClaim:

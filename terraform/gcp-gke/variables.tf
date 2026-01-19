@@ -4,7 +4,7 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "GCP Region"
+  description = "GCP region"
   type        = string
   default     = "us-central1"
 }
@@ -15,26 +15,20 @@ variable "cluster_name" {
   default     = "enterprise-cluster"
 }
 
-variable "network" {
-  description = "VPC Network name"
+variable "vpc_cidr" {
+  description = "CIDR for the VPC network"
   type        = string
-  default     = "default"
+  default     = "10.0.0.0/16"
 }
 
-variable "subnetwork" {
-  description = "Subnet name"
-  type        = string
-  default     = "default"
-}
-
-variable "ip_range_pods" {
-  description = "Secondary range name for Pods"
+variable "pod_ip_range_name" {
+  description = "Secondary range name for pods"
   type        = string
   default     = "gke-pods"
 }
 
-variable "ip_range_services" {
-  description = "Secondary range name for Services"
+variable "svc_ip_range_name" {
+  description = "Secondary range name for services"
   type        = string
   default     = "gke-services"
 }

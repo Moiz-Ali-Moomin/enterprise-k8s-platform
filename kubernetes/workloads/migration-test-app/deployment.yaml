@@ -4,7 +4,8 @@ metadata:
   name: migration-test-app
   namespace: default
   labels:
-    app: migration-test
+    app.kubernetes.io/name: migration-test
+    app.kubernetes.io/part-of: enterprise-platform
 spec:
   replicas: 1
   selector:
@@ -13,8 +14,12 @@ spec:
   template:
     metadata:
       labels:
-        app: migration-test
+        app.kubernetes.io/name: migration-test
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
       - name: data-gen
         image: busybox
@@ -30,6 +35,18 @@ spec:
           limits:
             cpu: 100m
             memory: 128Mi
+            
+        # Production: Health Probes
+        livenessProbe:
+          exec:
+            command: ["sh", "-c", "ps aux | grep -v grep | grep -q 'while true'"]
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          exec:
+            command: ["sh", "-c", "ls /mnt/data/timestamp.log"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
             
         volumeMounts:
         - name: data-volume

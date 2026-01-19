@@ -1,19 +1,26 @@
-# Enterprise Kubernetes Platform Architecture
+# Enterprise Platform Architecture
 
-## Overview
-This document outlines the high-level architecture of our Enterprise Kubernetes Platform, designed to support multi-cloud deployments (AWS, GCP, Azure, On-Prem).
+## Design Principles
+1. **Multi-Provider Consistency**: Standardized cluster configurations across AWS, Azure, GCP, OpenStack, and VMware.
+2. **GitOps First**: All state changes must go through Git. ArgoCD manages the reconciliation loop.
+3. **Zero-Trust Security**: Network segmentation, Pod Security Standards, and mTLS by default.
+4. **Unified Observability**: Centralized logging (ELK) and monitoring (Prometheus/Grafana) across all clusters.
 
-## Components
-- **Infrastructure Layer**: Managed K8s (EKS, GKE, AKS) and self-managed (Kind/Kubeadm for bare metal).
-- **Platform Layer**: Core services including Ingress, Cert-Manager, and Observability stack.
-- **Service Delivery**: GitOps based delivery using ArgoCD.
-- **Security**: Zero-trust model with strict Network Policies, RBAC, and Image Scanning.
+## Infrastructure Layer
+Managed by Terraform using remote state locking.
+- **AWS**: EKS with managed node groups, EFS for storage.
+- **Azure**: AKS with VNet integration and MSI.
+- **GCP**: GKE with Workload Identity and Shielded Nodes.
+- **On-Prem**: OpenStack/VMware using Ansible for node bootstrapping.
 
-## Node Strategy
-To ensure stability and isolation, we utilize specific node labels for scheduling:
-- `role: worker`: General purpose worker nodes for business workloads (referenced in ELK stack).
-- `role: infra`: Dedicated nodes for platform services (Ingress, Monitoring).
-- `topology.kubernetes.io/zone`: Standard cloud provider labels for HA.
+## Platform Services
+- **ArgoCD**: Deployed in `argocd` namespace, manages all other services.
+- **Istio**: Service Mesh for traffic management and security.
+- **ELK Stack**: Logging infrastructure with HA configuration.
+- **Prometheus/Grafana**: Full observability stack for metrics.
 
-## Diagrams
-*(To be added: Architecture Diagrams)*
+## Security Controls
+- **Kyverno**: Admission controller for policy enforcement.
+- **Istio mTLS**: Encrypted service-to-service communication.
+- **Network Policies**: Default deny-all ingress/egress policies.
+- **KMS/Key Vault**: Native cloud encryption integration.

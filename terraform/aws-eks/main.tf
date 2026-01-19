@@ -47,8 +47,8 @@ module "eks" {
 
   # Production: Private Endpoint Access Only (or Public with CIDR restrictions)
   cluster_endpoint_private_access = true
-  cluster_endpoint_public_access  = true 
-  cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"] # Production: Lock down in real env
+  cluster_endpoint_public_access  = length(var.allowed_cidr_blocks) > 0 ? true : false
+  cluster_endpoint_public_access_cidrs = var.allowed_cidr_blocks
 
   # Production: Secret Encryption
   cluster_encryption_config = {

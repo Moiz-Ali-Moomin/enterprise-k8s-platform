@@ -40,7 +40,7 @@ data "vsphere_virtual_machine" "template" {
 
 # Production Control Plane Nodes
 resource "vsphere_virtual_machine" "k8s_master" {
-  count            = 3
+  count            = var.master_count
   name             = "k8s-master-${count.index + 1}"
   resource_pool_id = data.vsphere_compute_cluster.cluster.resource_pool_id
   datastore_id     = data.vsphere_datastore.datastore.id
@@ -71,20 +71,26 @@ resource "vsphere_virtual_machine" "k8s_master" {
       }
       
       network_interface {
-        ipv4_address = "192.168.1.${10 + count.index}"
-        ipv4_netmask = 24
+        ipv4_address = cidrhost(var.network_cidr, var.master_ip_start + count.index)
+        ipv4_netmask = element(split("/", var.network_cidr), 1)
       }
       
-      ipv4_gateway = "192.168.1.1"
+      ipv4_gateway = var.network_gateway
     }
   }
   
-  # Anti-Affinity Rule (Simulated here, usually done via vsphere_compute_cluster_vm_anti_affinity_rule)
+  # Anti-Affinity Rule for High Availability
+}
+
+resource "vsphere_compute_cluster_vm_anti_affinity_rule" "masters" {
+  name                = "k8s-masters-anti-affinity"
+  compute_cluster_id  = data.vsphere_compute_cluster.cluster.id
+  virtual_machine_ids = vsphere_virtual_machine.k8s_master[*].id
 }
 
 # Production Worker Nodes
 resource "vsphere_virtual_machine" "k8s_worker" {
-  count            = 5
+  count            = var.worker_count
   name             = "k8s-worker-${count.index + 1}"
   resource_pool_id = data.vsphere_compute_cluster.cluster.resource_pool_id
   datastore_id     = data.vsphere_datastore.datastore.id
@@ -115,11 +121,11 @@ resource "vsphere_virtual_machine" "k8s_worker" {
       }
       
       network_interface {
-        ipv4_address = "192.168.1.${20 + count.index}"
-        ipv4_netmask = 24
+        ipv4_address = cidrhost(var.network_cidr, var.worker_ip_start + count.index)
+        ipv4_netmask = element(split("/", var.network_cidr), 1)
       }
       
-      ipv4_gateway = "192.168.1.1"
+      ipv4_gateway = var.network_gateway
     }
   }
 }

@@ -74,6 +74,16 @@ resource "openstack_compute_instance_v2" "k8s_master" {
   network {
     uuid = openstack_networking_network_v2.k8s_net.id
   }
+
+  # Anti-Affinity Server Group for HA
+  scheduler_hints {
+    group = openstack_compute_servergroup_v2.k8s_masters_group.id
+  }
+}
+
+resource "openstack_compute_servergroup_v2" "k8s_masters_group" {
+  name     = "k8s-masters-affinity"
+  policies = ["anti-affinity"]
 }
 
 resource "openstack_compute_instance_v2" "k8s_worker" {

@@ -14,12 +14,25 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Configuration
-JENKINS_URL="http://ac07df3aa616f49a28e402fc7a313b61-257689397.us-west-2.elb.amazonaws.com"
-JENKINS_USER="admin"
-JENKINS_TOKEN="114275c63975659257e96f354b42d1b944"
-AWS_REGION="us-west-2"
-ECR_REPO_NAME="nginx-demo"
+# Configuration - Load from environment variables
+JENKINS_URL="${JENKINS_URL:-}"
+JENKINS_USER="${JENKINS_USER:-admin}"
+JENKINS_TOKEN="${JENKINS_TOKEN:-}"
+AWS_REGION="${AWS_REGION:-us-west-2}"
+ECR_REPO_NAME="${ECR_REPO_NAME:-nginx-demo}"
+
+# Validate required environment variables
+if [ -z "$JENKINS_URL" ]; then
+    echo -e "${RED}Error: JENKINS_URL environment variable not set${NC}"
+    echo "Please set: export JENKINS_URL='http://your-jenkins-url'"
+    exit 1
+fi
+
+if [ -z "$JENKINS_TOKEN" ]; then
+    echo -e "${RED}Error: JENKINS_TOKEN environment variable not set${NC}"
+    echo "Please set: export JENKINS_TOKEN='your-jenkins-token'"
+    exit 1
+fi
 
 # Get AWS Account ID
 echo -e "${YELLOW}[1/6] Retrieving AWS Account ID...${NC}"

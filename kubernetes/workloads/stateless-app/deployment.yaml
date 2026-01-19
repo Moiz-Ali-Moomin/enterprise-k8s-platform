@@ -4,7 +4,8 @@ metadata:
   name: stateless-app
   namespace: default
   labels:
-    app: stateless
+    app.kubernetes.io/name: stateless
+    app.kubernetes.io/part-of: enterprise-platform
 spec:
   replicas: 3
   selector:
@@ -13,7 +14,7 @@ spec:
   template:
     metadata:
       labels:
-        app: stateless
+        app.kubernetes.io/name: stateless
     spec:
       # Production: Security Context
       securityContext:
