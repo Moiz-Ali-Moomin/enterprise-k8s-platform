@@ -2,18 +2,28 @@
 
 This document outlines the comprehensive technology stack used in the Enterprise Kubernetes Platform, categorized by function.
 
-## 🛠️ Infrastructure & Provisioning
-*   **Terraform:** The core Infrastructure-as-Code (IaC) tool used to provision resources.
-    *   **Providers:** `aws` (EKS, VPC, KMS) and `openstack` (Instances, Networking).
-    *   **Backends:** S3 (AWS) and Swift (OpenStack) for remote state management.
+## 🛠️ Infrastructure & Provisioning (Multi-Cloud)
+The platform is designed for a **Hybrid Multi-Cloud** strategy, utilizing Terraform to manage resources across all major providers.
+
+*   **Terraform:** The core Infrastructure-as-Code (IaC) tool.
+    *   **Cloud Providers:**
+        *   **AWS:** EKS (Elastic Kubernetes Service), VPC, IAM, KMS.
+        *   **Azure:** AKS (Azure Kubernetes Service), VNet, Azure Monitor.
+        *   **GCP:** GKE (Google Kubernetes Engine), VPC, Cloud IAM.
+        *   **OpenStack:** Private Cloud Compute/Networking for on-premise clusters.
+    *   **Backends:** Remote state management configured for each provider (S3, GCS, Azure Blob, Swift).
 *   **Python 3:** Used for custom automation scripting, specifically the `ansible/scripts/generate_inventory.py` bridge between Terraform and Ansible.
 
 ## ⚙️ Configuration Management
-*   **Ansible:** Used for post-provisioning configuration, node hardening, and bootstrapping functionality.
-    *   **Dynamic Inventory:** Custom integration to fetch live IP addresses from Terraform state.
+The platform supports a flexible configuration layer, allowing teams to use their preferred tools for node hardening and bootstrapping.
+
+*   **Ansible:** Primary tool for agentless configuration and patching.
+    *   **Features:** Dynamic Inventory integration, automated node bootstrapping.
+*   **Chef:** Supported for environments requiring agent-based state enforcement (Cookbooks).
+*   **Puppet:** Supported for large-scale compliance and drift management (Manifests).
 
 ## ⚓ Container & Orchestration
-*   **Kubernetes (v1.27):** The container orchestration engine.
+*   **Kubernetes (v1.27+):** The unified container orchestration layer across all clouds.
 *   **Docker:** Used for building container images and running CI runners.
 *   **Kind / Kubeadm:** Used for bootstrapping the OpenStack/Bare-metal clusters.
 
@@ -24,12 +34,24 @@ This document outlines the comprehensive technology stack used in the Enterprise
     *   **Sync:** Automatically syncs Kubernetes manifests from Git to the cluster.
     *   **Versioning:** Apps are pinned to specific Git tags for stability.
 
-## 🛡️ Security & Networking
-*   **Istio:** Service Mesh for traffic management, mTLS, and observability.
-*   **Trivy:** Vulnerability scanner for container images (integrated into GitHub Actions).
-*   **AWS KMS:** Key Management Service for performing envelope encryption on Kubernetes Secrets.
-*   **Cert-Manager:** Automated TLS certificate management using Let's Encrypt / Internal CA.
-*   **Network Policies:** Kubernetes-native firewall rules configured with a "Default Deny" posture.
+## 💾 Storage & Persistence
+*   **CSI Drivers:** Container Storage Interfaces for dynamic volume provisioning.
+    *   **AWS EBS CSI:** Block storage for AWS EKS workloads.
+    *   **NFS:** File-based shared storage for ReadWriteMany (RWX) claims on OpenStack/On-Prem.
+*   **Data Migration:** Custom scripts for persistent volume migration.
+
+## 🛡️ Security & Compliance
+*   **Policy as Code:**
+    *   **Kyverno:** Enforces Pod Security Standards (Restricted Profile), requiring non-root users, dropping capabilities, and disallowing privileged containers.
+*   **Vulnerability Management:**
+    *   **Trivy:**
+        *   **CI Scanning:** Scans images during the build pipeline (GitHub Actions).
+        *   **Runtime Scanning:** Scheduled CronJobs (`security/image-scanning/scan-job.yaml`) scan running cluster images daily.
+*   **Traffic Security:**
+    *   **Istio:** mTLS encryption between microservices.
+    *   **Network Policies:** Zero-Trust "Default Deny" firewall rules.
+*   **Secrets Management:**
+    *   **AWS KMS / Azure Key Vault / GCP KMS:** Provider-specific integrations for Secret encryption.
 
 ## 📊 Observability
 *   **ELK Stack:** Centralized logging solution.
