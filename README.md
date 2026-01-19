@@ -200,7 +200,14 @@ For detailed deep-dives into specific areas, please refer to the `docs/` directo
 
 ## 🛠️ Getting Started
 
-### Prerequisites
+### One-Click Production Deploy (Recommended)
+The platform includes a master orchestration script that handles backend bootstrapping, infrastructure provisioning, and GitOps setup in one go.
+
+```powershell
+./PROD-DEPLOY.ps1 -Cloud AWS -Region us-east-1
+```
+
+### Manual Prerequisites
 - Terraform >= 1.5.0
 - Ansible >= 2.10
 - kubectl >= 1.27
