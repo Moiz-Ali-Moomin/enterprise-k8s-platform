@@ -1,0 +1,8 @@
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: efs.csi.aws.com
+spec:
+  attachRequired: false      # EFS (NFS) does NOT need volume attach
+  podInfoOnMount: false
+  fsGroupPolicy: File

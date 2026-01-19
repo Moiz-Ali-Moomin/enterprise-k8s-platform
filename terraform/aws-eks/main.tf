@@ -48,7 +48,7 @@ module "eks" {
   # Production: Private Endpoint Access Only (or Public with CIDR restrictions)
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = true 
-  cluster_endpoint_public_access_cidrs = ["1.2.3.4/32"] # Restrict to VPN/Office IP
+  cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"] # Production: Lock down in real env
 
   # Production: Secret Encryption
   cluster_encryption_config = {
@@ -58,6 +58,21 @@ module "eks" {
 
   # Production: Control Plane Logging
   cluster_enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+
+  cluster_addons = {
+    coredns = {
+      most_recent = true
+    }
+    kube-proxy = {
+      most_recent = true
+    }
+    vpc-cni = {
+      most_recent = true
+    }
+    aws-efs-csi-driver = {
+      most_recent = true
+    }
+  }
 
   eks_managed_node_groups = {
     # General Purpose

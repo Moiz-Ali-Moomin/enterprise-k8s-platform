@@ -1,0 +1,41 @@
+_meta:
+  type: "config"
+  config_version: 2
+
+config:
+  dynamic:
+    # Production: Restrict authentication
+    http:
+      anonymous_auth_enabled: false
+      pxc_channel:
+        auto_expand_request_resources: true
+      
+    authc:
+      # Internal Auth (Native)
+      internal_auth:
+        order: 1
+        description: "Internal Database Authentication"
+        http_enabled: true
+        transport_enabled: true
+        http_authenticator:
+          type: basic
+          challenge: true
+        authentication_backend:
+          type: intern
+          
+      # LDAP/AD Integeration (Enterprise Standard)
+      # ldap_auth:
+      #   order: 2
+      #   description: "Corporate LDAP"
+      #   http_enabled: true
+      #   ...
+
+    authz:
+      roles_from_my_ldap:
+        description: "LDAP Role Mapping"
+        http_enabled: true
+        transport_enabled: true
+        authorization_backend:
+          type: ldap
+          config:
+            # ...

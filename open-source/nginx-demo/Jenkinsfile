@@ -1,0 +1,120 @@
+pipeline {
+    agent {
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: jenkins-agent
+spec:
+  containers:
+  - name: docker
+    image: docker:dind
+    securityContext:
+      privileged: true
+    volumeMounts:
+      - name: dind-storage
+        mountPath: /var/lib/docker
+  - name: tools
+    image: alpine:latest
+    command: ["cat"]
+    tty: true
+    volumeMounts:
+      - name: docker-sock
+        mountPath: /var/run/docker.sock
+  volumes:
+  - name: dind-storage
+    emptyDir: {}
+  - name: docker-sock
+    emptyDir: {}
+'''
+        }
+    }
+    stages {
+        stage('Build') {
+            steps {
+                container('docker') {
+                    sh '''
+                        cd open-source/nginx-demo
+                        docker build -t nginx-demo:${BUILD_NUMBER} .
+                        docker tag nginx-demo:${BUILD_NUMBER} nginx-demo:latest
+                    '''
+                }
+            }
+        }
+        
+        stage('Security Scan (Trivy)') {
+            steps {
+                container('docker') {
+                    sh '''
+                        # Install Trivy
+                        apk add --no-cache curl
+                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+                        
+                        # Scan the image
+                        trivy image --severity HIGH,CRITICAL --exit-code 0 nginx-demo:${BUILD_NUMBER}
+                        
+                        # Generate report
+                        trivy image --format json --output /tmp/trivy-report.json nginx-demo:${BUILD_NUMBER}
+                    '''
+                }
+            }
+        }
+        
+        stage('Code Analysis (SonarQube)') {
+            steps {
+                script {
+                    // SonarQube analysis for static code
+                    echo 'SonarQube analysis - Install sonar-scanner and run analysis'
+                    // TODO: Add SonarQube server URL and token
+                    // sh 'sonar-scanner -Dsonar.projectKey=nginx-demo -Dsonar.sources=. -Dsonar.host.url=http://sonarqube.sonarqube'
+                }
+            }
+        }
+        
+        stage('Push to Registry') {
+            steps {
+                container('docker') {
+                    script {
+                        // ECR Login and Push
+                        withCredentials([usernamePassword(credentialsId: 'ecr-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                            sh '''
+                                # Install AWS CLI
+                                apk add --no-cache python3 py3-pip
+                                pip3 install awscli
+                                
+                                # ECR Login
+                                export AWS_REGION=us-west-2
+                                export ECR_REPO=734366662579.dkr.ecr.us-west-2.amazonaws.com/nginx-demo
+                                
+                                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO}
+                                
+                                # Tag and Push
+                                docker tag nginx-demo:${BUILD_NUMBER} ${ECR_REPO}:${BUILD_NUMBER}
+                                docker tag nginx-demo:${BUILD_NUMBER} ${ECR_REPO}:latest
+                                docker push ${ECR_REPO}:${BUILD_NUMBER}
+                                docker push ${ECR_REPO}:latest
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy (GitOps)') {
+            steps {
+                echo 'Updating Kubernetes manifest with new image tag...'
+                script {
+                    // Update deployment.yaml with new image tag
+                    // ArgoCD will automatically sync and deploy
+                    sh '''
+                        # TODO: Update kubernetes manifest in Git repo
+                        # This triggers ArgoCD to sync
+                        echo "Image: nginx-demo:${BUILD_NUMBER}" > deployment-tag.txt
+                    '''
+                }
+            }
+        }
+    }
+}

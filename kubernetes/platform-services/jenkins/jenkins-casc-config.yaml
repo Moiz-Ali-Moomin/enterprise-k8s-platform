@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jenkins-casc-config
+  namespace: jenkins
+data:
+  jenkins.yaml: |
+    jenkins:
+      systemMessage: "Jenkins configured automatically by JCasC"
+      numExecutors: 0
+      mode: NORMAL
+      
+      securityRealm:
+        local:
+          allowsSignup: false
+          users:
+            - id: "admin"
+              password: "admin"
+      
+      authorizationStrategy:
+        globalMatrix:
+          permissions:
+            - "Overall/Administer:admin"
+            - "Overall/Read:authenticated"
+      
+      clouds:
+        - kubernetes:
+            name: "kubernetes"
+            serverUrl: "https://kubernetes.default"
+            namespace: "jenkins"
+            jenkinsUrl: "http://jenkins:8080"
+            jenkinsTunnel: "jenkins:50000"
+            containerCapStr: "10"
+            connectTimeout: 5
+            readTimeout: 15
+            podLabels:
+              - key: "jenkins"
+                value: "agent"
+            templates:
+              - name: "default"
+                namespace: "jenkins"
+                label: "jenkins-agent"
+                nodeUsageMode: NORMAL
+                containers:
+                  - name: "jnlp"
+                    image: "jenkins/inbound-agent:latest"
+                    alwaysPullImage: true
+                    workingDir: "/home/jenkins/agent"
+                    ttyEnabled: true
+                    resourceRequestCpu: "500m"
+                    resourceRequestMemory: "512Mi"
+                    resourceLimitCpu: "1000m"
+                    resourceLimitMemory: "1Gi"
+    
+    credentials:
+      system:
+        domainCredentials:
+          - credentials:
+              - usernamePassword:
+                  scope: GLOBAL
+                  id: "ecr-credentials"
+                  username: "${AWS_ACCESS_KEY_ID}"
+                  password: "${AWS_SECRET_ACCESS_KEY}"
+                  description: "AWS ECR Credentials"
+              - string:
+                  scope: GLOBAL
+                  id: "sonarqube-token"
+                  secret: "${SONARQUBE_TOKEN}"
+                  description: "SonarQube Authentication Token"
+    
+    unclassified:
+      location:
+        url: "http://jenkins.jenkins:8080"
+      
+      sonarGlobalConfiguration:
+        installations:
+          - name: "SonarQube"
+            serverUrl: "http://sonarqube.sonarqube:9000"
+            credentialsId: "sonarqube-token"
+      
+      globalLibraries:
+        libraries:
+          - name: "shared-library"
+            defaultVersion: "main"
+            implicit: false
+            allowVersionOverride: true
+            includeInChangesets: true
+    
+    jobs:
+      - script: |
+          pipelineJob('nginx-demo') {
+            description('CI/CD Pipeline for NGINX Demo Application')
+            
+            triggers {
+              genericTrigger {
+                genericVariables {
+                  genericVariable {
+                    key('branch')
+                    value('$.branch')
+                  }
+                  genericVariable {
+                    key('commit')
+                    value('$.commit')
+                  }
+                }
+                token('nginx-demo-trigger-token')
+                printContributedVariables(true)
+                printPostContent(true)
+                silentResponse(false)
+              }
+            }
+            
+            definition {
+              cpsScm {
+                scm {
+                  git {
+                    remote {
+                      url('https://github.com/Moiz-Ali-Moomin/enterprise-k8s-platform.git')
+                    }
+                    branches('*/main')
+                  }
+                }
+                scriptPath('open-source/nginx-demo/Jenkinsfile')
+              }
+            }
+          }
+    
+    tool:
+      git:
+        installations:
+          - name: "Default"
+            home: "git"
