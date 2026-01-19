@@ -1,0 +1,18 @@
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+k8s_version=1.27.0-00
+
+[k8s_control_plane]
+master-1 ansible_host=192.168.1.10
+
+[k8s_workers]
+worker-1 ansible_host=192.168.1.11
+worker-2 ansible_host=192.168.1.12
+worker-3 ansible_host=192.168.1.13
+
+[k8s_cluster:children]
+k8s_control_plane
+k8s_workers
+
+[storage_nodes]
+nfs-server ansible_host=192.168.1.100

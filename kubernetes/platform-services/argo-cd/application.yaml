@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: enterprise-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/haxor/enterprise-k8s-platform.git' # Replace with actual repo
+    targetRevision: v1.0.0 # Pinned to stable release tag
+    path: kubernetes/
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: default
+  
+  # Production: Sync Policy
+  syncPolicy:
+    # Auto-Sync enabled for Continuous Deployment, but careful with Prune
+    automated:
+      prune: true
+      selfHeal: true
+    
+    # Production: Retry Strategy
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+        
+    # Validation
+    syncOptions:
+      - Validate=true
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true # Prune other resources before last one (safety)
+      - ApplyOutOfSyncOnly=true # Performance optimization

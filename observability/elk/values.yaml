@@ -1,0 +1,109 @@
+opensearch:
+  clusterName: "enterprise-logging"
+  replicas: 3
+  
+  # Resource Management
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "4Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi" # Limit == Request for Guaranteed QoS
+
+  # JVM Configuration
+  extraEnvs:
+    - name: "OPENSEARCH_JAVA_OPTS"
+      value: "-Xms2g -Xmx2g" # 50% of container memory
+
+  # High Availability & Scheduling
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2 # Protect quorum during maintenance
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app: opensearch-cluster
+
+  nodeSelector:
+    role: "worker" # Documented in architecture.md
+
+  # Storage
+  persistence:
+    enabled: true
+    size: 100Gi
+    storageClass: "gp3"
+    accessModes:
+      - ReadWriteOnce
+
+  # System Tuning
+  sysctlInitContainer:
+    enabled: true
+
+  # Security
+  securityConfig:
+    enabled: true
+    actionGroupsSecret: "security-action-groups"
+    configSecret: "security-config"
+    internalUsersSecret: "security-internal-users"
+    rolesSecret: "security-roles"
+    rolesMappingSecret: "security-roles-mapping"
+    tenantsSecret: "security-tenants"
+
+dashboards:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: true
+    hosts:
+      - host: kibana.internal.corp
+        paths:
+          - path: /
+    tls:
+      - secretName: kibana-tls
+        hosts:
+          - kibana.internal.corp
+
+logstash:
+  replicas: 2
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: "gp3"
+  
+  # Justification: PVC enabled for Persistent Queues to handle backpressure/spikes
+  extraEnvs:
+    - name: "LS_JAVA_OPTS"
+      value: "-Xms1g -Xmx1g"
+    - name: "QUEUE_TYPE"
+      value: "persisted"
+    - name: "QUEUE_MAX_BYTES"
+      value: "10gb"
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app: logstash

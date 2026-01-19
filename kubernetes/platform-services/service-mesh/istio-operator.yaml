@@ -1,0 +1,76 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: istio-control-plane
+  namespace: istio-system
+spec:
+  profile: default # Production defaults (High Availability)
+  
+  # 1. Component Settings
+  components:
+    pilot:
+      k8s:
+        # High Availability
+        replicaCount: 3
+        podDisruptionBudget:
+          minAvailable: 2
+        
+        # Resource Management
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2048Mi
+          limits:
+            cpu: 1000m
+            memory: 4096Mi
+            
+        # Strategy
+        strategy:
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+            
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        k8s:
+          replicaCount: 3
+          hpaSpec:
+            minReplicas: 3
+            maxReplicas: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+          service:
+            ports:
+              - port: 80
+                targetPort: 8080
+                name: http2
+              - port: 443
+                targetPort: 8443
+                name: https
+          # Production: Anti-Affinity
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                    - istio-ingressgateway
+                topologyKey: "kubernetes.io/hostname"
+
+  # 2. Mesh Configuration
+  meshConfig:
+    accessLogFile: /dev/stdout # Critical for Observability
+    enableTracing: true
+    defaultConfig:
+      tracing:
+        sampling: 100.0 # Adjust for traffic volume
+    outboundTrafficPolicy:
+      mode: REGISTRY_ONLY # Security: Block undefined external traffic

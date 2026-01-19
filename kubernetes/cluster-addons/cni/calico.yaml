@@ -1,0 +1,45 @@
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  # Configures Calico Networking.
+  calicoNetwork:
+    # Note: The ipPools section cannot be modified post-install.
+    ipPools:
+    - blockSize: 26
+      # CRITICAL: 192.168.0.0/16 is dangerous as it often conflicts with home/office routers or VPCs.
+      # Using standard K8s pod CIDR 10.244.0.0/16. 
+      # MUST ensure this does NOT overlap with the underlying VPC/VNet CIDR.
+      cidr: 10.244.0.0/16
+      encapsulation: VXLANCrossSubnet
+      natOutgoing: Enabled
+      nodeSelector: all()
+    
+    # BGP Configuration
+    # Explicitly disabled for VXLAN overlay mode to avoid ambiguity.
+    bgp: Disabled
+
+    # MTU Configuration
+    # VXLAN adds 50 bytes headers. If Host MTU is 1500, Calico should be 1450.
+    # Misconfiguration here causes packet drops and TLS handshake failures.
+    mtu: 1450
+
+---
+# Production Tuning: Felix Configuration
+# Global configuration for Calico nodes
+apiVersion: projectcalico.org/v3
+kind: FelixConfiguration
+metadata:
+  name: default
+spec:
+  # Operational Logging
+  logSeverityScreen: Info
+  
+  # Privacy
+  usageReportingEnabled: false
+  
+  # Connectivity & Performance
+  # Graceful restart ensures data plane remains active during agent restarts
+  bpfEnabled: false # Set to true if kernel >= 5.3 for perf boost
+  xfrmInboundHeaderOffset: 0

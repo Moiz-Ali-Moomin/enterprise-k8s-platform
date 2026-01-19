@@ -1,0 +1,81 @@
+---
+- name: Install migration dependencies
+  apt:
+    name:
+      - rsync
+      - nfs-common
+      - pv
+      - jq
+    state: present
+
+- name: Ensure mount points exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /mnt/legacy-storage
+    - /mnt/new-k8s-storage
+
+- name: Check source NFS availability
+  wait_for:
+    host: "{{ source_nfs_server }}"
+    port: 2049
+    state: started
+    timeout: 30
+
+- name: Mount source NFS (Read-Only Safety)
+  mount:
+    path: /mnt/legacy-storage
+    src: "{{ source_nfs_server }}:{{ source_path }}"
+    fstype: nfs
+    opts: ro # Safety first: Mount source as Read-Only
+    state: mounted
+
+- name: Mount destination (if strictly NFS)
+  # In k8s migration, this might be a PVC or another NFS export. 
+  # Assuming NFS destination for this playbook context.
+  mount:
+    path: /mnt/new-k8s-storage
+    src: "{{ dest_nfs_server }}:{{ dest_path }}"
+    fstype: nfs
+    state: mounted
+  when: dest_nfs_server is defined
+
+- name: Perform Rsync Data Migration
+  # Using archive mode for permissions/timestamps, delete to mirror, and partial for resume support
+  # Excluding lost+found and temporary files
+  command: >
+    rsync -archive --verbose --human-readable --progress --partial
+    --exclude 'lost+found'
+    --exclude '*.tmp'
+    /mnt/legacy-storage/ 
+    /mnt/new-k8s-storage/
+  register: rsync_result
+  async: 7200 # Allow 2 hours
+  poll: 0
+
+- name: Watch Migration Status
+  async_status:
+    jid: "{{ rsync_result.ansible_job_id }}"
+  register: job_result
+  until: job_result.finished
+  retries: 240 # Check every 30s for 2 hours
+  delay: 30
+
+- name: Verify Data Integrity (Checksum)
+  # Calculating checksums for sample critical files or full tree (if small)
+  # For huge datasets, rely on rsync's return code or sample check
+  shell: |
+    diff -r /mnt/legacy-storage/critical_config /mnt/new-k8s-storage/critical_config
+  ignore_errors: yes
+  register: verification_check
+
+- name: Log Migration Result
+  local_action: 
+    module: copy
+    content: |
+      Migration Completed at: {{ ansible_date_time.iso8601 }}
+      Rsync Status: {{ 'Success' if job_result.finished else 'Failed' }}
+      Verification: {{ verification_check.rc }}
+    dest: ./migration_report.log

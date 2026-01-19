@@ -1,0 +1,108 @@
+---
+- name: Ensure dependencies are installed
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg-agent
+      - software-properties-common
+      - ipvsadm # Production: for kube-proxy
+    state: present
+    update_cache: yes
+
+- name: Add Docker/Containerd GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker repository
+  apt_repository:
+    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+    state: present
+
+- name: Install Containerd
+  apt:
+    name: containerd.io
+    state: present
+
+- name: Configure Containerd modules
+  copy:
+    content: |
+      overlay
+      br_netfilter
+    dest: /etc/modules-load.d/containerd.conf
+  notify: Restart Containerd
+
+- name: Generate Containerd config
+  shell: |
+    mkdir -p /etc/containerd
+    containerd config default > /etc/containerd/config.toml
+    sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+  notify: Restart Containerd
+
+- name: Add Kubernetes GPG key
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Add Kubernetes repository
+  apt_repository:
+    repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+    state: present
+
+- name: Install Kubernetes tools (Pinned Version)
+  apt:
+    name:
+      - "kubelet={{ k8s_version }}"
+      - "kubeadm={{ k8s_version }}"
+      - "kubectl={{ k8s_version }}"
+    state: present
+    force: yes
+
+- name: Hold Kubernetes packages
+  dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+
+- name: Check if cluster is already initialized
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: kube_conf
+
+- name: Initialize Kubernetes Master
+  command: >
+    kubeadm init 
+    --pod-network-cidr=10.244.0.0/16 
+    --upload-certs 
+    --control-plane-endpoint=192.168.1.10
+  when: 
+    - inventory_hostname in groups['k8s_control_plane']
+    - not kube_conf.stat.exists
+  register: kubeadmin_init
+
+- name: Create .kube directory
+  file:
+    path: /home/ubuntu/.kube
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: 0755
+  when: inventory_hostname in groups['k8s_control_plane']
+
+- name: Copy admin.conf to user's kube config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /home/ubuntu/.kube/config
+    remote_src: yes
+    owner: ubuntu
+    group: ubuntu
+    mode: 0600
+  when: inventory_hostname in groups['k8s_control_plane']
+  ignore_errors: yes # In case file doesn't exist yet

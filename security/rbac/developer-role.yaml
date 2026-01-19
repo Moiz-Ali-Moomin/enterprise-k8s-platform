@@ -1,0 +1,47 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: enterprise:view-only
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "namespaces", "pods", "services", "endpoints", "events", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "daemonsets", "statefulsets", "replicasets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch"]
+
+---
+# Least-Privilege Developer Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer-role
+  namespace: default
+rules:
+- apiGroups: ["", "apps", "batch"]
+  resources: ["pods", "pods/log", "pods/exec", "deployments", "services", "configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Security: Explicitly deny access to Secrets and ResourceQuotas
+- apiGroups: [""]
+  resources: ["secrets", "serviceaccounts", "resourcequotas"]
+  verbs: ["get", "list"] # Read-only, no create/update
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-group-binding
+  namespace: default
+subjects:
+- kind: Group
+  name: "oidc:developers" # Best Practice: Bind to IdP Groups, not Users
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer-role
+  apiGroup: rbac.authorization.k8s.io

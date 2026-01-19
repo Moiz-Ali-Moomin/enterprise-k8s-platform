@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: migration-test-app
+  namespace: default
+  labels:
+    app: migration-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: migration-test
+  template:
+    metadata:
+      labels:
+        app: migration-test
+    spec:
+      containers:
+      - name: data-gen
+        image: busybox
+        # Production: Robust loop avoiding high load
+        command: ["/bin/sh"]
+        args: ["-c", "while true; do date >> /mnt/data/timestamp.log; echo 'Generating critical data...' >> /mnt/data/data.txt; sleep 5; done"]
+        
+        # Production: Resource Limits
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+            
+        volumeMounts:
+        - name: data-volume
+          mountPath: /mnt/data
+          
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: migration-pvc-source
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: migration-pvc-source
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd # Testing our new class
+  resources:
+    requests:
+      storage: 5Gi

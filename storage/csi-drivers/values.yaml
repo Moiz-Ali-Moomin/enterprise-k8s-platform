@@ -1,0 +1,65 @@
+# Production Values for AWS EBS CSI Driver Helm Chart
+# Chart: https://github.com/kubernetes-sigs/aws-ebs-csi-driver
+
+# 1. Controller (Stateful Logic)
+controller:
+  replicaCount: 2 # High Availability
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  
+  # IAM Roles for Service Accounts (IRSA) - Critical for Security
+  serviceAccount:
+    create: true
+    name: ebs-csi-controller-sa
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/AmazonEKS_EBS_CSI_DriverRole"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+      
+  # Affinity for HA
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app
+              operator: In
+              values:
+              - ebs-csi-controller
+          topologyKey: kubernetes.io/hostname
+
+# 2. Node DaemonSet (Mount Logic)
+node:
+  # Priority Class to ensure it runs even on stressed nodes
+  priorityClassName: system-node-critical
+  
+  tolerateAllTaints: true
+  
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# 3. StorageClass Management
+storageClasses: 
+  - name: fast-ssd
+    annotations:
+      storageclass.kubernetes.io/is-default-class: "false"
+    parameters:
+      encrypted: "true"
+      type: gp3
+      iops: "6000"
+      throughput: "250"
+    allowVolumeExpansion: true

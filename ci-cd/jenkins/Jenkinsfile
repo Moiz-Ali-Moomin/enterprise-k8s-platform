@@ -1,0 +1,128 @@
+pipeline {
+    agent {
+        kubernetes {
+            # Dynamic Agent Pod for scalability
+            yaml """
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    role: jenkins-agent
+spec:
+  serviceAccountName: jenkins-agent
+  containers:
+  - name: maven
+    image: maven:3.8.6-openjdk-11
+    command: ['cat']
+    tty: true
+  - name: docker
+    image: docker:20.10.17-dind # Docker-in-Docker or use Kaniko
+    command: ['dockerd-entrypoint.sh']
+    securityContext:
+      privileged: true # Required for DinD
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ['cat']
+    tty: true
+"""
+        }
+    }
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 1, unit: 'HOURS')
+        disableConcurrentBuilds()
+        ansiColor('xterm')
+    }
+    
+    environment {
+        REGISTRY_CREDENTIALS = credentials('docker-registry-creds')
+        SONAR_TOKEN = credentials('sonarqube-token')
+        KUBE_CONFIG = credentials('kube-config-sa')
+        IMAGE_NAME = "my-registry/my-app:${BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Checkout & Init') {
+            steps {
+                checkout scm
+                script {
+                    currentBuild.displayName = "#${BUILD_NUMBER} - ${GIT_BRANCH}"
+                }
+            }
+        }
+        
+        # Parallel Execution for Speed
+        stage('Test & Analyze') {
+            parallel {
+                stage('Unit Tests') {
+                    steps {
+                        container('maven') {
+                            sh 'mvn test'
+                        }
+                    }
+                }
+                stage('Static Analysis') {
+                    steps {
+                        container('maven') {
+                            withSonarQubeEnv('SonarQube') {
+                                sh 'mvn sonar:sonar -Dsonar.login=${SONAR_TOKEN}'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+        
+        stage('Build & Push') {
+            when { branch 'main' }
+            steps {
+                container('docker') {
+                    sh """
+                        docker login -u ${REGISTRY_CREDENTIALS_USR} -p ${REGISTRY_CREDENTIALS_PSW} my-registry
+                        docker build -t ${IMAGE_NAME} .
+                        docker push ${IMAGE_NAME}
+                    """
+                    # Option: Trivy scan the image here before push
+                }
+            }
+        }
+        
+        stage('Deploy to Prod') {
+            when { branch 'main' }
+            steps {
+                # Manual Approval Gate for Production
+                input message: "Deploy to Production?", ok: "Yes"
+                
+                container('kubectl') {
+                    withKubeConfig([credentialsId: 'kube-config-sa', serverUrl: 'https://kubernetes.default']) {
+                        sh "kubectl set image deployment/my-app my-app=${IMAGE_NAME} -n production"
+                        sh "kubectl rollout status deployment/my-app -n production"
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "Pipeline succeeded! Notification sent."
+            # slackSend color: 'good', message: "Build ${currentBuild.fullDisplayName} Success"
+        }
+        failure {
+            echo "Pipeline failed!"
+            # slackSend color: 'danger', message: "Build ${currentBuild.fullDisplayName} Failed"
+        }
+    }
+}

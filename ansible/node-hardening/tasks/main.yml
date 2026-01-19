@@ -1,0 +1,82 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install security updates
+  apt:
+    upgrade: dist
+    force_apt_get: yes
+  when: ansible_os_family == "Debian"
+
+# Production: Advanced Firewall
+- name: Setup UFW firewall
+  ufw:
+    state: enabled
+    policy: deny
+    log: yes
+  when: ansible_os_family == "Debian"
+
+- name: Allow SSH (Limit to management subnet in real prod)
+  ufw:
+    rule: allow
+    port: '22'
+    proto: tcp
+
+# Production: Specific K8s Ports
+- name: Allow Kubernetes API
+  ufw:
+    rule: allow
+    port: '6443'
+    proto: tcp
+
+- name: Allow Kubelet API
+  ufw:
+    rule: allow
+    port: '10250'
+    proto: tcp
+
+# Production: Kernel Tuning
+- name: Set kernel parameters for K8s & Security
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+    - { name: 'net.ipv4.ip_forward', value: '1' }
+    - { name: 'vm.swappiness', value: '0' } # Disable swap usage
+    - { name: 'vm.overcommit_memory', value: '1' }
+
+# Production: Disable Swap (Critical for K8s)
+- name: Disable SWAP
+  shell: |
+    swapoff -a
+  when: ansible_swaptotal_mb > 0
+
+- name: Remove SWAP from fstab
+  mount:
+    name: "{{ item }}"
+    fstype: swap
+    state: absent
+  with_items:
+    - swap
+    - none
+
+# Production: SSH Hardening
+- name: Disable root login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+  notify: Restart SSH
+
+- name: Disable password authentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+  notify: Restart SSH

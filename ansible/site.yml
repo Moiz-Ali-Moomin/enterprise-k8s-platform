@@ -1,0 +1,12 @@
+---
+- name: Harden Nodes
+  hosts: all
+  become: true
+  roles:
+    - node-hardening
+
+- name: Bootstrap Kubernetes
+  hosts: k8s-cluster
+  become: true
+  roles:
+    - kube-bootstrap

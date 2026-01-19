@@ -1,0 +1,63 @@
+# Production: Secret for DB Password
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+type: Opaque
+stringData:
+  # In real production, use SealedSecrets or ExternalSecrets
+  password: "supersecurepassword"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: stateful-db
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: database
+  serviceName: "database"
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine # Modern version
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: password
+        ports:
+        - containerPort: 5432
+          name: postgresql
+        
+        # Production: Probes
+        livenessProbe:
+          exec:
+            command: ["pg_isready", "-U", "postgres"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "postgres"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "gp3" # Use our fast-ssd class
+      resources:
+        requests:
+          storage: 10Gi

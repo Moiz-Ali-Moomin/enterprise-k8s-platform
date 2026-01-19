@@ -1,0 +1,60 @@
+# Modern Replacement for PodSecurityPolicy (PSP is removed in K8s 1.25+)
+# Using Kyverno for Policy-as-Code
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restricted-pod-security
+  annotations:
+    policies.kyverno.io/title: Restricted Pod Security Standards (PSS)
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-run-as-non-root
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+      validate:
+        message: "Running as root is not allowed. Set runAsNonRoot to true."
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+            containers:
+              - =(securityContext):
+                  =(runAsNonRoot): true
+
+    - name: disallow-privileged-containers
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+      validate:
+        message: "Privileged mode is not allowed."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  privileged: false
+
+    - name: drop-all-capabilities
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+      validate:
+        message: "Capabilities must be dropped."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - ALL

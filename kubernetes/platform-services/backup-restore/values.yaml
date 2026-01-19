@@ -1,0 +1,59 @@
+# Production Velero Configuration
+
+# 1. Schedules
+schedules:
+  daily-backup:
+    disabled: false
+    schedule: "0 1 * * *" # Run at 1 AM
+    template:
+      ttl: "720h" # Retain for 30 days
+      includedNamespaces:
+        - "*" # Backup everything
+      excludedNamespaces:
+        - kube-system
+        - velero
+      storageLocation: default
+      volumeSnapshotLocations:
+        - default
+
+# 2. Resource Management
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+
+# 3. High Availability / Reliability
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+configuration:
+  provider: aws
+  backupStorageLocation:
+    name: default
+    bucket: "enterprise-k8s-backups"
+    prefix: "cluster-1"
+    config:
+      region: "us-west-2"
+  volumeSnapshotLocation:
+    name: default
+    config:
+      region: "us-west-2"
+
+# 4. Security
+serviceAccount:
+  server:
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/velero-server"
+
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.6.0
+    volumeMounts:
+      - mountPath: /target
+        name: plugins

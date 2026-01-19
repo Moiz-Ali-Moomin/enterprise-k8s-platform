@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: trivy-image-scan-daily
+  namespace: security
+spec:
+  schedule: "0 2 * * *" # Daily at 2 AM
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: trivy-scanner
+          # Safety: Do not run on master nodes
+          nodeSelector:
+            role: worker
+            
+          containers:
+          - name: trivy
+            image: aquasec/trivy:0.41.0
+            imagePullPolicy: IfNotPresent
+            # Scan specific critical images or all running images
+            command:
+            - trivy
+            - image
+            - --severity
+            - "CRITICAL,HIGH"
+            - --exit-code
+            - "1" 
+            - "nginx:1.25-alpine" # Example target targeting your base images
+            
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1000
+              readOnlyRootFilesystem: true
+              
+          restartPolicy: OnFailure
+          
+          # Trivy Cache volume
+          volumes:
+          - name: trivy-cache
+            emptyDir: {}

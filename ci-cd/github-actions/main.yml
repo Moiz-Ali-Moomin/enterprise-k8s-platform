@@ -1,0 +1,135 @@
+name: Enterprise CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 1. Continuous Integration & Quality Checks
+  ci-checks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # Required for CodeQL/Trivy
+    steps:
+    - uses: actions/checkout@v3
+    
+    # Speed Optimization: Cache Modules
+    - name: Cache Go Modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Run Unit Tests
+      run: go test -v ./...
+      
+    # Security: SAST Scan (Trivy Config Check)
+    - name: Run Trivy Vulnerability Scanner (Repo)
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        ignore-unfixed: true
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH'
+
+    - name: Upload Trivy Scan Results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # 2. Build & Publish Container (Only on push to main/develop)
+  build-push:
+    needs: ci-checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Log in to the Container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: type=sha,format=long
+          
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # 3. Deployment to Staging (Automatic)
+  deploy-staging:
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+          
+      - name: Set Kubeconfig (Staging)
+        uses: azure/k8s-set-context@v3
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG_STAGING }}
+          
+      - name: Deploy to Staging
+        run: |
+          # Uses envsubst or kustomize in real scenario
+          sed -i "s|IMAGE_PLACEHOLDER|${{ needs.build-push.outputs.image_tag }}|g" k8s/deployment.yaml
+          kubectl apply -f k8s/deployment.yaml -n staging
+
+  # 4. Deployment to Production (Manual Approval required via Environment)
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: 
+      name: production
+      url: https://prod.example.com
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set Kubeconfig (Production)
+        uses: azure/k8s-set-context@v3
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG_PROD }}
+          
+      - name: Deploy to Production
+        run: |
+          sed -i "s|IMAGE_PLACEHOLDER|${{ needs.build-push.outputs.image_tag }}|g" k8s/deployment.yaml
+          kubectl apply -f k8s/deployment.yaml -n production

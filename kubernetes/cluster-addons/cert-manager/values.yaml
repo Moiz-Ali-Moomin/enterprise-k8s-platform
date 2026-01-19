@@ -1,0 +1,81 @@
+# Production-grade Cert-Manager Configuration
+
+# 1. CRD Management
+# recommended: true for initial GitOps bootstrap.
+# production note: In strict environments, manage CRDs separately via a dedicated 'crds' chart or folder.
+installCRDs: true
+
+# 2. High Availability
+replicaCount: 2
+
+# 3. Security Hardening
+global:
+  logLevel: 2
+  leaderElection:
+    namespace: "cert-manager"
+
+# Controller Configuration
+resources:
+  requests:
+    cpu: 100m
+    memory: 200Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+# Webhook Configuration (Critical for validation)
+webhook:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  securePort: 10250
+
+# CA Injector Configuration
+cainjector:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# 4. Observability (Prometheus Operator Integration)
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: true
+    prometheusInstance: default
+    labels:
+      release: prometheus # Matches common Prometheus Operator label selectors
+    interval: 60s
+    scrapeTimeout: 30s
+
+# 5. Scheduling & Affinity
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        topologyKey: kubernetes.io/hostname
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - cert-manager
+          - key: app.kubernetes.io/component
+            operator: In
+            values:
+            - controller
