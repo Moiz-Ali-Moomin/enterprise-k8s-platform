@@ -4,39 +4,43 @@
 ![Status](https://img.shields.io/badge/status-production--ready-green.svg)
 ![Terraform](https://img.shields.io/badge/IaC-Terraform-purple.svg)
 ![Kubernetes](https://img.shields.io/badge/Orchestration-Kubernetes-326ce5.svg)
+![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions%20%7C%20ArgoCD-orange)
 
-## 🚀 The Core Problem
-In modern enterprise environments, platform teams struggle with **Infrastructure Fragmentation**. provisioning and securing Kubernetes clusters across public clouds (AWS EKS) and private data centers (OpenStack/Bare Metal) often results in:
-- **Inconsistent Security Postures**: Different firewalls and policies for Cloud vs. On-Prem.
-- **Operational Drift**: Manual "snowflake" configurations that break scaling.
-- **Complexity Overload**: Managing state, secrets, and networking across disparate providers.
+## 📖 Overview
+The **Enterprise Kubernetes Platform** is a production-grade, holistic infrastructure solution designed to solve the complexity of managing Kubernetes across hybrid environments. It provides a unified control plane for provisioning, securing, and operating clusters on **AWS (EKS), Azure (AKS), Google Cloud (GKE), and Private Cloud (OpenStack/Bare Metal)**.
 
-## 💡 The Solution
-The **Enterprise Kubernetes Platform** is a unified, opinionated, and automated infrastructure stack that standardizes the *entire* lifecycle of Kubernetes clusters. It decouples the "What" (Platform Services) from the "Where" (AWS/OpenStack) using a strict **Infrastructure-as-Code** and **GitOps** approach.
+This project implements the "Golden Path" for platform engineering, enforcing strict **Infrastructure-as-Code (IaC)**, **GitOps**, and **Zero-Trust Security** principles.
 
-## 🔑 Key Features
+## 🚀 Key Features
 
-### 1. Unified Infrastructure as Code (Terraform)
-- **Multi-Provider Support**: First-class modules for **AWS EKS** (Cloud-Native) and **OpenStack** (Private Cloud).
-- **State Safety**: Configured with Remote Backends (**S3 + DynamoDB** for AWS, **Swift** for OpenStack) and State Locking to prevent corruption in team environments.
-- **Modular Design**: Reusable modules for networking, compute, and security groups.
+### 1. Multi-Cloud Infrastructure (Terraform)
+- **Universal Provisioning**: Modular Terraform code to spin up clusters on any major provider.
+- **State Management**: Zero-risk collaboration using remote backends (S3, Swift, Azure Blob, GCS) with state locking.
+- **Hybrid Networking**: Seamless handling of VPCs, VNets, and On-Prem networking.
 
-### 2. Intelligent Configuration Management (Ansible)
-- **Dynamic Inventory Bridge**: Custom Python scripts (`ansible/scripts/generate_inventory.py`) that automatically query Terraform state to generate live Ansible inventories.
-- **Zero-Touch Bootstrapping**: Automatically configures worker nodes without manual IP management.
+### 2. Configuration Management (Ansible / Chef / Puppet)
+- **Flexible Hardening**: Supports multiple CM tools to manage node baselines and OS compliance.
+- **Dynamic Inventory**: Custom Python automation (`ansible/scripts/generate_inventory.py`) bridges Terraform state with Ansible, eliminating manual IP management.
+- **Zero-Touch Bootstrap**: Automated provisioning of worker nodes from raw OS to K8s-ready state.
 
-### 3. Production-Grade Security
-- **Network Hardening**:
-    - **Kubernetes**: "Default Deny" Network Policies to enforce Zero Trust.
-    - **Cloud**: Parameterized Security Groups to restrict SSH/API access to VPNs only.
-- **Encryption**: Full envelope encryption for Kubernetes Secrets using **AWS KMS**.
-- **Supply Chain Security**: Docker image scanning via **Trivy** in CI pipelines.
+### 3. GitOps Delivery (ArgoCD)
+- **Declarative Operations**: The entire platform state (Monitoring, Security, Apps) is defined in Git.
+- **Drift Detection**: Automatic synchronization ensures the live cluster always matches the repo.
+- **Versioning**: Strict pinning of application versions (e.g., `v1.0.0`) prevents "latest tag" breakages.
 
-### 4. GitOps Delivery (ArgoCD)
-- **Declarative Apps**: All platform services (Service Mesh, Ingress, Monitoring) defined in Git.
-- **Stability**: Pinned application revisions (e.g., `v1.0.0`) to prevent "latest tag" outages.
+### 4. Production-Grade Security (DevSecOps)
+- **Policy as Code**: **Kyverno** enforces Pod Security Standards (Restricted Profile) to block privileged containers.
+- **Network Segmentation**: **Istio** Service Mesh (mTLS) and "Default Deny" Network Policies.
+- **Vulnerability Mgmt**: **Trivy** scans container images in the CI pipeline and via daily CronJobs in the cluster.
+- **Storage Encryption**: Integration with AWS KMS, Azure Key Vault, and GCP KMS for Kubernetes Secrets.
 
-## 🏗️ Architecture Overview
+### 5. Observability & Storage
+- **Logging & Metrics**: Full **ELK Stack** (Elasticsearch, Logstash, Kibana) and **Prometheus/Grafana** integration.
+- **Stateful Workloads**: CSI Drivers (AWS EBS, Cinder) and NFS support for persistent data.
+
+## 🏗️ Architecture
+
+The platform follows a layered architecture to decouple infrastructure from applications:
 
 ```mermaid
 graph TD
@@ -47,31 +51,41 @@ graph TD
         Test -->|Build| Image[Container Registry]
     end
 
-    subgraph "Provisioning (Terraform)"
-        TF[Terraform CLI] -->|State Lock| S3[S3 Backend]
-        TF -->|Apply| AWS[AWS EKS]
-        TF -->|Apply| OS[OpenStack]
+    subgraph "Infrastructure Layer (Terraform)"
+        TF[Terraform CLI] -->|State Lock| Backend[Remote Backend]
+        TF -->|Provision| AWS[AWS EKS]
+        TF -->|Provision| Azure[Azure AKS]
+        TF -->|Provision| GCP[Google GKE]
+        TF -->|Provision| OpenStack[OpenStack / On-Prem]
     end
 
-    subgraph "Configuration (Ansible)"
-        TF -->|Outputs IPs| Script[Dynamic Inventory Script]
-        Script -->|Inventory| Ansible[Ansible Playbook]
-        Ansible -->|Configure| OS
+    subgraph "Config Layer (Ansible/Chef/Puppet)"
+        TF -.->|Outputs IPs| Bridge[Dynamic Inventory Script]
+        Bridge -->|Generate| Inv[Inventory]
+        Inv -->|Configure| OpenStack
     end
 
-    subgraph "GitOps (ArgoCD)"
-        Argo[ArgoCD Controller] -->|Watch| Git
-        Argo -->|Sync| AWS
-        Argo -->|Sync| OS
+    subgraph "Application Layer (ArgoCD)"
+        Argo[ArgoCD Controller] -->|Sync| AWS
+        Argo -->|Sync| Azure
+        Argo -->|Sync| GCP
+        Argo -->|Sync| OpenStack
     end
 ```
+
+## 📚 Documentation
+For detailed deep-dives into specific areas, please refer to the `docs/` directory:
+
+- **[Technology Stack](./docs/technology-stack.md)**: A complete list of all 20+ tools and technologies used.
+- **[Project Structure](./docs/project-structure.md)**: A file-by-file map of the repository layout.
+- **[Architecture](./docs/architecture.md)**: System design patterns and decision logs.
 
 ## 🛠️ Getting Started
 
 ### Prerequisites
 - Terraform >= 1.5.0
 - Ansible >= 2.10
-- AWS CLI / OpenStack CLI configured
+- AWS/Azure/GCP/OpenStack CLI configured
 
 ### Quick Deploy (AWS)
 ```bash
@@ -84,7 +98,7 @@ terraform apply
 aws eks update-kubeconfig --name enterprise-cluster
 ```
 
-### Quick Deploy (OpenStack)
+### Quick Deploy (OpenStack with Ansible)
 ```bash
 # 1. Provision Infrastructure
 cd terraform/openstack-kind
@@ -100,4 +114,4 @@ ansible-playbook -i inventory site.yml
 ```
 
 ## 🛡️ License
-MIT
+MIT License.
